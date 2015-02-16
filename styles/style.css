@@ -1,0 +1,16 @@
+body { margin: 0; }
+canvas { width: 100%; height: 100% }
+#container{ width: 100%; height: 100% }
+#info{
+	position: absolute; 
+	background-color: "#FF0000";
+	z-index: 1;
+}
+#instructions{
+	width:80%;
+	text-align: center;
+	position: absolute; 
+	
+	background-color: "#FF0000";
+	z-index: 1;
+}
