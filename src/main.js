@@ -13,19 +13,56 @@ IK.mouse = new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.Mesh
         emissive: '#006063',
         shininess: 100 } ) );       
 IK.event = {
-    keyListener: function (e, camera){
+
+    selectedBoneIndices: [false, false, false, false, false, false, false, false, false],
+
+    keyListener: function (e, secondaryTaskValues, boneChain){
         e = e || event; // to deal with IE
 
+        //if a number key (1-9)
+        if(e.keyCode>48 && e.keyCode<58){
+            var index = e.keyCode-49;
+            IK.event.selectedBoneIndices[index] = !IK.event.selectedBoneIndices[index];
+            if(boneChain[index]!==undefined){
+                boneChain[index].material.color = (IK.event.selectedBoneIndices[index]) ? new THREE.Color('#FF0000') : new THREE.Color('#00abb1');
+            }
+        }
+
+        function increaseTheta(selected, i){
+            if(selected && secondaryTaskValues.e(i+1)!==null){
+                secondaryTaskValues.elements[i] += 0.05;
+                secondaryTaskValues.elements.forEach(IK.printInfo);
+            }
+        }
+        function decreaseTheta(selected, i){
+            if(selected && secondaryTaskValues.e(i+1)!==null){
+                secondaryTaskValues.elements[i] -= 0.05;
+                secondaryTaskValues.elements.forEach(IK.printInfo);
+            }
+        }
+
+        if(e.keyCode === 38){
+            IK.event.selectedBoneIndices.forEach(increaseTheta);
+        }
+        if(e.keyCode === 40){
+            IK.event.selectedBoneIndices.forEach(decreaseTheta);
+        }
+
+    
+    },
+
+    mouseWheelListener: function (e, camera){
+        e = e || event; // to deal with IE
+        console.log(e);
         var dir = IK.mouse.position.sub( camera.position );
         var distance = dir.length();
         dir.normalize();
 
-        if(e.keyCode===38){
-            distance += 0.5;
+        if(e.wheelDelta>0){
+            distance += 2;
+        }else{
+            distance -= 2;
         }
-        if(e.keyCode===40){
-            distance -= 0.5;
-        } 
 
         var pos = camera.position.clone().add( dir.multiplyScalar( distance ));
 
@@ -79,19 +116,34 @@ IK.main = function (){
         lastBone,
         e_delta = new THREE.Vector3(),
         theta_delta = new THREE.Euler(),
-        newState;
+        newState,
+        secondaryTaskValues = Sylvester.Vector.Zero(numBones),
+        secondaryTask;
 
 
     
     renderer.setSize( window.innerWidth, window.innerHeight );
     document.getElementById("container").appendChild( renderer.domElement );
+
+    //print info
+        var preText = document.createTextNode("Secondary Task Values: ");
+    document.getElementById("info").appendChild(preText); 
+    for(var i in secondaryTaskValues.elements){
+        var div = document.createElement("div");
+        div.className = "value-box";
+        document.getElementById("info").appendChild(div);
+    }
+    secondaryTaskValues.elements.forEach(IK.printInfo);
     
     //add listeners
     document.addEventListener('keydown', function (event){
-        IK.event.keyListener(event, camera)});
+        IK.event.keyListener(event, secondaryTaskValues, boneChain)});
 
     document.addEventListener('mousemove', function (event){
         IK.event.mouseMoveListener(event, camera)});
+
+    document.addEventListener('wheel', function (event){
+        IK.event.mouseWheelListener(event, camera)});
 
     // add subtle ambient lighting
     var ambientLight = new THREE.AmbientLight(0x222222);
@@ -148,7 +200,9 @@ IK.main = function (){
         jacobian = IK.createJacobian(boneChain);
         inverseJacobian = IK.createInverseJacobian(jacobian);
 
-        newState = (inverseJacobian.x($V([e_delta.x, e_delta.y, e_delta.z, theta_delta.x, theta_delta.y, theta_delta.z]))).x(0.08).elements;
+        secondaryTask = (Sylvester.Matrix.I(numBones).subtract(inverseJacobian.x(jacobian))).x(secondaryTaskValues);
+
+        newState = (inverseJacobian.x($V([e_delta.x, e_delta.y, e_delta.z, theta_delta.x, theta_delta.y, theta_delta.z])).add(secondaryTask)).x(0.08).elements;
         //newState = (inverseJacobian.x($V([e_delta.x, e_delta.y, e_delta.z]))).x(0.08).elements;
 
         boneChain.forEach(updatePosition);
@@ -201,4 +255,11 @@ IK.createInverseJacobian =  function (jacobian){
     return inverseJacobian;
 };
 
+IK.printInfo = function (value, i){
 
+    var valueBox = document.getElementsByClassName("value-box")[i]; 
+    valueBox.innerHTML="";
+    var text = document.createTextNode(" Bone #" + (parseInt(i)+1) + " = " + (+value.toFixed(2)) + " rad");
+    valueBox.appendChild(text);
+    
+}

@@ -52,11 +52,11 @@ Bone.prototype = {
     },
 
     getGlobalRotationAxis: function (){
-        //console.log(this.boneMesh.worldToLocal(this.rotationAxis.clone()));
+
         var axis = this.rotationAxis.clone();
 
         axis.transformDirection(this.boneMesh.matrixWorld);
-        //console.log(axis);
+
         return axis;
     },
 
