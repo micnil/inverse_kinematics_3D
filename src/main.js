@@ -3,197 +3,183 @@
 /*global Sylvester */
 /*global $M */
 /*global $V */
-
 var IK = IK || {};
-IK.mouse = new THREE.Vector3(0, 0, 5);         
+IK.mouse = new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.MeshPhongMaterial( {
+        // light
+        specular: '#a9fcff',
+        // intermediate
+        color: '#00FF00',
+        // dark
+        emissive: '#006063',
+        shininess: 100 } ) );       
 IK.event = {
-    selectedBoneIndices: [false, false, false, false, false, false, false, false, false],
-    addMouseListener: function(element) {
-        var mouse = {x: 0, y: 0},
-        body_scrollLeft = document.body.scrollLeft,
-        element_scrollLeft = document.documentElement.scrollLeft,
-        body_scrollTop = document.body.scrollTop,
-        element_scrollTop = document.documentElement.scrollTop,
-        offsetLeft = element.offsetLeft,
-        offsetTop = element.offsetTop;
+    keyListener: function (e, camera){
+        e = e || event; // to deal with IE
 
-        element.addEventListener('mousemove', function (event) {
-        var x, y;
+        var dir = IK.mouse.position.sub( camera.position );
+        var distance = dir.length();
+        dir.normalize();
+
+        if(e.keyCode===38){
+            distance += 0.5;
+        }
+        if(e.keyCode===40){
+            distance -= 0.5;
+        } 
+
+        var pos = camera.position.clone().add( dir.multiplyScalar( distance ));
+
+        IK.mouse.position.set(pos.x, pos.y, pos.z);
+
+    },
+
+    mouseMoveListener: function (e, camera){
+        var vector = new THREE.Vector3(),
+        x,
+        y;
+
 
         if (event.pageX || event.pageY) {
                 x = event.pageX;
                 y = event.pageY;
             } else {
-                x = event.clientX + body_scrollLeft + element_scrollLeft;
-                y = event.clientY + body_scrollTop + element_scrollTop;
+                x = event.clientX;
+                y = event.clientY;
             }
-            x -= offsetLeft;
-            y -= offsetTop;
 
-            IK.mouse.x = x;
-            IK.mouse.y = y;
-        }, false);
+            vector.set(
+                ( x / window.innerWidth ) * 2 - 1,
+                - ( y / window.innerHeight ) * 2 + 1,
+                0.5 );
 
+            vector.unproject( camera );
 
-        /*element.addEventListener('mousedown', function (event) {
+            var dir = vector.sub( camera.position ).normalize();
 
-            switch (event.which) {
-                case 1:
-                    IK.mouse.z=IK.mouse.z+0.1;
-                    console.log("hej1");
-                    break;
-                case 2:
-                    // Nothing happens here, later maybe move camera
-                    break;
-                case 3:
-                console.log("hej1");
-                    event.preventDefault();
-                    IK.mouse.z=IK.mouse.z-0.1;
-                    break;
-                default:
-                    console.log("strange mouse");
-            }  
-        }, false);*/
-    },
+            var distance = IK.mouse.position.sub(camera.position).length();
 
-    keyListener: function (e, secondaryTaskValues, boneChain){
-        e = e || event; // to deal with IE
+            var pos = camera.position.clone().add( dir.multiplyScalar( distance ) );
 
-        //if a number key (1-9)
-        if(e.keyCode>48 && e.keyCode<58){
-            var index = e.keyCode-49;
-            IK.event.selectedBoneIndices[index] = !IK.event.selectedBoneIndices[index];
-            if(boneChain[index]!==undefined){
-                boneChain[index].color = (IK.event.selectedBoneIndices[index]) ? "#FF0000" : "#0000FF";
-            }
-        }
-
-        if(e.keyCode===73){
-            IK.mouse.z=IK.mouse.z+0.5;
-            console.log("hej1");
-        }
-        if(e.keyCode===79){
-            console.log("hej2");
-            IK.mouse.z=IK.mouse.z-0.5;
-        }
-
-
-        function increaseTheta(selected, i){
-            if(selected && secondaryTaskValues.e(i+1)!==null){
-                secondaryTaskValues.elements[i] += 0.05;
-            }
-        }
-        function decreaseTheta(selected, i){
-            if(selected && secondaryTaskValues.e(i+1)!==null){
-                secondaryTaskValues.elements[i] -= 0.05;
-            }
-        }
-
-        if(e.keyCode === 38){
-            IK.event.selectedBoneIndices.forEach(increaseTheta);
-        }
-        if(e.keyCode === 40){
-            IK.event.selectedBoneIndices.forEach(decreaseTheta);
-        }
-
+            IK.mouse.position.x = pos.x;
+            IK.mouse.position.y = pos.y;
+            IK.mouse.position.z = pos.z;
     }
 };
-/*IK.WIDTH = window.innerWidth;
-IK.HEIGHT = window.innerHeight;*/
+
 IK.main = function (){
+
     var scene = new THREE.Scene(),
         camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 ),
         renderer = new THREE.WebGLRenderer(),
-        boneChain = [], 
-        numBones = 2, 
+        numBones = 10,
+        boneChain = [],
         jacobian,
         inverseJacobian,
-        secondaryTaskValues = Sylvester.Vector.Zero(numBones),
-        secondaryTask,
-        e_delta, //will be used for delta mouse movement
-        theta_delta, //will be an array with each joint delta rotation angle
-        e; //end effector, the last point on the chain
+        endEffector,
+        lastBone,
+        e_delta = new THREE.Vector3(),
+        theta_delta = new THREE.Euler(),
+        newState;
 
+
+    
     renderer.setSize( window.innerWidth, window.innerHeight );
     document.getElementById("container").appendChild( renderer.domElement );
+    
+    //add listeners
+    document.addEventListener('keydown', function (event){
+        IK.event.keyListener(event, camera)});
+
+    document.addEventListener('mousemove', function (event){
+        IK.event.mouseMoveListener(event, camera)});
+
+    // add subtle ambient lighting
+    var ambientLight = new THREE.AmbientLight(0x222222);
+    scene.add(ambientLight);
+
+    // directional lighting
+    var directionalLight = new THREE.DirectionalLight(0xffffff);
+    directionalLight.position.set(1, 1, 1).normalize();
+    scene.add(directionalLight);
+
+    //create mouse pointer
+    IK.mouse.position.set(0, 20, 0);
+    scene.add(IK.mouse);
+
+    
+    // create bone chain
+    boneChain.push(new Bone(1, new THREE.Vector3(0, 1, 0)));
+    for(var i = 0; i<numBones-1; i++){
+        boneChain.push(new Bone(5, new THREE.Vector3(1, 0, 0)));    
+    }
+    lastBone = boneChain[numBones-1];
+    
+
+    // add bones to scene
+    boneChain.forEach(function (bone, i){
+        if(i<numBones-1)
+            boneChain[i+1].connectTo(bone);
+    });
+    boneChain[0].boneMesh.position.y += boneChain[0].length/2;
+    scene.add(boneChain[0].boneMesh);
+
     camera.position.z = 50;
-
-    boneChain = IK.createBoneChain(0, 0, 0, numBones); 
-
-    function addToScene(bone){
-        scene.add(bone.cylinder);
-    }
-    boneChain.forEach(addToScene);
-
-    window.onkeyup = function(e){
-        IK.event.keyListener(e, secondaryTaskValues, boneChain);
+    function updatePosition(bone, i){
+             bone.update(newState[i]);         
     }
 
-    function draw(bone) {
-        bone.draw(context); //KOLLA HÄR
-    }
+    var render = function () {
+        requestAnimationFrame( render );
 
-    function move(bone, i){
-        bone.rotateLocally(theta_delta[i]);
+        var vectorFrom = lastBone.getGlobalAxis(2),
+            vectorTo = new THREE.Vector3(),
+            q = new THREE.Quaternion();
+            
+        vectorTo.subVectors(IK.mouse.position, lastBone.getGlobalStartPos());
+
+        endEffector = lastBone.getGlobalEndPos();
+
+        e_delta.subVectors(IK.mouse.position, endEffector);
         
-        if(i !== 0){
-            bone.connect(boneChain[i-1]);
-        }
-    }
+        q.setFromUnitVectors(vectorFrom.normalize(), vectorTo.normalize());
 
-    (function drawFrame () {
-        window.requestAnimationFrame(drawFrame); 
-
-        e = boneChain[numBones-1].getGlobalEndPos();
-
-        e_delta = $V([IK.mouse.x, IK.mouse.y, IK.mouse.z]).subtract(e);
+        theta_delta.setFromQuaternion(q); 
 
         jacobian = IK.createJacobian(boneChain);
         inverseJacobian = IK.createInverseJacobian(jacobian);
-        secondaryTask = (Sylvester.Matrix.I(numBones).subtract(inverseJacobian.x(jacobian))).x(secondaryTaskValues);
-        theta_delta = ((inverseJacobian.x(e_delta)).add(secondaryTask)).x(0.08).elements;
 
-        boneChain.forEach(move);
-        //boneChain.forEach(draw);
+        newState = (inverseJacobian.x($V([e_delta.x, e_delta.y, e_delta.z, theta_delta.x, theta_delta.y, theta_delta.z]))).x(0.08).elements;
+        //newState = (inverseJacobian.x($V([e_delta.x, e_delta.y, e_delta.z]))).x(0.08).elements;
+
+        boneChain.forEach(updatePosition);
         renderer.render(scene, camera);
-    }());
+    };
+    render();
 };
 
-IK.createBoneChain = function (xStart, yStart, zStart, numOfBones){
-    var boneChain = [];
-    boneChain.push(new Bone(xStart, yStart, zStart));
-    numOfBones--;
-    while(numOfBones--){
-        boneChain.push(new Bone());
-    }
-    function connectBone(bone, i){ 
-
-        if(i!==0){
-            bone.connect(boneChain[i-1]);
-        }  
-        if(i%2!==0){
-            bone.endPos = bone.endPos.x(-1);  
-        }
-    }
-    boneChain.forEach(connectBone);
-
-    return boneChain;
-};
 
 IK.createJacobian = function (boneChain) {
 
     var jacobianRows = [],
         jacobian,
-        numBones = boneChain.length;
+        numBones = boneChain.length,
+        endEffector,
+        row = new THREE.Vector3(),
+        r = new THREE.Vector3();
 
     for(var i = 0; i<numBones;i++){
         // one row (later column after transpose): rotationAxis X (endEffector - joint[i])
-        var row = boneChain[i].rotationAxis.cross(boneChain[numBones-1].getGlobalEndPos().subtract(boneChain[i].startPos));  
-        jacobianRows.push(row.elements);
+        
+        endEffector = boneChain[numBones-1].getGlobalEndPos();
+
+        row.crossVectors(boneChain[i].getGlobalRotationAxis(), r.subVectors(endEffector,boneChain[i].getGlobalStartPos()));  
+        jacobianRows.push(row.toArray().concat(boneChain[i].getGlobalRotationAxis().toArray()));
+        //jacobianRows.push(row.toArray());
     }
     
     jacobian = $M(jacobianRows);
     jacobian = jacobian.transpose();
+
     return jacobian;
 };
 
@@ -205,31 +191,14 @@ IK.createInverseJacobian =  function (jacobian){
     } else {
         //pseudo inverse with damping
         //(A'*A + lambda*I)^-1*A'
-
-        var lambda = 10.0, //damping constant
+        var lambda = 5.0, //damping constant
             square = jacobian.transpose().x(jacobian),
             dampedSquare = square.add(Sylvester.Matrix.I(square.rows()).x(Math.pow(lambda,2))),
             inverseDampedSquare = dampedSquare.inverse(),
             inverseJacobian = inverseDampedSquare.x(jacobian.transpose());    
     }
+
     return inverseJacobian;
 };
 
-IK.printInfo = function (value, i){
 
-    var valueBox = document.getElementsByClassName("value-box")[i]; 
-    valueBox.innerHTML="";
-    var text = document.createTextNode(" Bone #" + (parseInt(i)+1) + " = " + (+value.toFixed(2)) + " rad");
-    valueBox.appendChild(text);
-    
-}
-
-if (!window.requestAnimationFrame) {
-  window.requestAnimationFrame = (window.webkitRequestAnimationFrame ||
-                                  window.mozRequestAnimationFrame ||
-                                  window.msRequestAnimationFrame ||
-                                  window.oRequestAnimationFrame ||
-                                  function (callback) {
-                                    return window.setTimeout(callback, 17 /*~ 1000/60*/);
-                                  });
-}

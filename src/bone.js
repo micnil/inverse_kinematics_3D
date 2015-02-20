@@ -1,39 +1,85 @@
 /*global Sylvester */
 /*global $V */
 
-var Bone = function (x, y, z, length){
-    this.startPos = (x && y && z) ? $V([x, y, z]) : $V([0,0,0]);
+var Bone = function (length, rotationAxis){
+
     this.length = length || 10;
-    this.endPos = $V([this.length, 0, 0]);
-    this.rotationAxis = Sylvester.Vector.k;
-    this.color = "#0000FF";
-    this.geometry = new THREE.CylinderGeometry( 1, 1, this.length, 32 );
-    this.material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
-    this.cylinder = new THREE.Mesh( this.geometry, this.material );
-    this.cylinder.translateY(this.length/2); 
- 
+    this.rotationAxis = rotationAxis || new THREE.Vector3(1, 0, 0);
+    this.geometry = new THREE.CylinderGeometry( 0.5, 0.5, this.length, 32);
+    this.material = new THREE.MeshPhongMaterial( {// light
+        specular: '#a9fcff',
+        // intermediate
+        color: '#00abb1',
+        // dark
+        emissive: '#006063',
+        shininess: 100 } );
+    this.boneMesh = new THREE.Mesh( this.geometry, this.material );
+    
 };
 
 Bone.prototype = {
-
-    connect: function (bone){
-        this.startPos=bone.getGlobalEndPos();
+    connectTo: function (bone){
+        bone.boneMesh.add(this.boneMesh);
+        //this.boneMesh.position.y += bone.length;
+        this.boneMesh.translateY(bone.length/2 + this.length/2);
+        console.log(bone.length);
+       // this.boneMesh.position.x += 2;
     },
 
-    rotateLocally: function (rad){
-        //rotation matrix
-        var rotation = Sylvester.Matrix.Rotation(rad, this.rotationAxis);
+    update: function (theta){
 
-        this.endPos = rotation.x(this.endPos);
+        this.boneMesh.translateY(-this.length/2);
 
-        //this.cylinder.translateY(-this.length/2); 
-        this.cylinder.rotateOnAxis(new THREE.Vector3(0, 0, 1), rad);
-        //  this.cylinder.translateY(this.length/2); 
+        this.boneMesh.rotateOnAxis(this.rotationAxis, theta);
+
+        this.boneMesh.translateY(this.length/2);
+
     },
 
-    getGlobalEndPos: function(){
-        return this.startPos.add(this.endPos);
-    }
+    //returns the endpoint in global coordinates
+    getGlobalEndPos: function (){
 
+        var e = new THREE.Vector3(0, this.length/2, 0);
+
+        return this.boneMesh.localToWorld(e);
+    },
+
+    getGlobalStartPos: function (){
+
+        var e = new THREE.Vector3(0, -this.length/2, 0);
+
+        return this.boneMesh.localToWorld(e);
+    },
+
+    getGlobalRotationAxis: function (){
+        //console.log(this.boneMesh.worldToLocal(this.rotationAxis.clone()));
+        var axis = this.rotationAxis.clone();
+
+        axis.transformDirection(this.boneMesh.matrixWorld);
+        //console.log(axis);
+        return axis;
+    },
+
+    getGlobalAxis: function (axis_number){
+        //console.log(this.boneMesh.worldToLocal(this.rotationAxis.clone()));
+        var axis;
+        switch (axis_number){
+            case 1:
+                axis = new THREE.Vector3(1, 0, 0);
+                break;
+            case 2:
+                axis = new THREE.Vector3(0, 1, 0);
+                break;
+            case 3:
+                axis = new THREE.Vector3(0, 0, 1);
+                break;
+            default:
+                console.log("wat?");
+        }
+
+        axis.transformDirection(this.boneMesh.matrixWorld);
+
+        return axis;
+    },
 
 };
