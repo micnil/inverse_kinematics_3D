@@ -3,7 +3,9 @@
 /*global Sylvester */
 /*global $M */
 /*global $V */
+
 var IK = IK || {};
+
 IK.mouse = new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.MeshPhongMaterial( {
         // light
         specular: '#a9fcff',
@@ -12,59 +14,7 @@ IK.mouse = new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.Mesh
         // dark
         emissive: '#006063',
         shininess: 100 } ) );       
-IK.event = {
-    keyListener: function (e, camera){
-        e = e || event; // to deal with IE
 
-        var dir = IK.mouse.position.sub( camera.position );
-        var distance = dir.length();
-        dir.normalize();
-
-        if(e.keyCode===38){
-            distance += 0.5;
-        }
-        if(e.keyCode===40){
-            distance -= 0.5;
-        } 
-
-        var pos = camera.position.clone().add( dir.multiplyScalar( distance ));
-
-        IK.mouse.position.set(pos.x, pos.y, pos.z);
-
-    },
-
-    mouseMoveListener: function (e, camera){
-        var vector = new THREE.Vector3(),
-        x,
-        y;
-
-
-        if (event.pageX || event.pageY) {
-                x = event.pageX;
-                y = event.pageY;
-            } else {
-                x = event.clientX;
-                y = event.clientY;
-            }
-
-            vector.set(
-                ( x / window.innerWidth ) * 2 - 1,
-                - ( y / window.innerHeight ) * 2 + 1,
-                0.5 );
-
-            vector.unproject( camera );
-
-            var dir = vector.sub( camera.position ).normalize();
-
-            var distance = IK.mouse.position.sub(camera.position).length();
-
-            var pos = camera.position.clone().add( dir.multiplyScalar( distance ) );
-
-            IK.mouse.position.x = pos.x;
-            IK.mouse.position.y = pos.y;
-            IK.mouse.position.z = pos.z;
-    }
-};
 
 IK.main = function (){
 
@@ -76,10 +26,10 @@ IK.main = function (){
         jacobian,
         inverseJacobian,
         endEffector,
-        lastBone,
-        e_delta = new THREE.Vector3(),
-        theta_delta = new THREE.Euler(),
-        newState;
+        lastBone, // will be set as boneChain[numBones-1]
+        e_delta = new THREE.Vector3(), //vector from end effector to target position
+        theta_delta = new THREE.Euler(), //angle from lastbone to target vector
+        newState; //new state of the boneChain (only delta angles)
 
 
     
@@ -131,23 +81,25 @@ IK.main = function (){
     var render = function () {
         requestAnimationFrame( render );
 
+        //variables needed for theta_delta
         var vectorFrom = lastBone.getGlobalAxis(2),
             vectorTo = new THREE.Vector3(),
             q = new THREE.Quaternion();
             
+        //angle delta
         vectorTo.subVectors(IK.mouse.position, lastBone.getGlobalStartPos());
-
-        endEffector = lastBone.getGlobalEndPos();
-
-        e_delta.subVectors(IK.mouse.position, endEffector);
-        
         q.setFromUnitVectors(vectorFrom.normalize(), vectorTo.normalize());
-
         theta_delta.setFromQuaternion(q); 
 
+        //positional delta
+        endEffector = lastBone.getGlobalEndPos();
+        e_delta.subVectors(IK.mouse.position, endEffector);
+        
+        //creating a jacobian and inversing it
         jacobian = IK.createJacobian(boneChain);
-        inverseJacobian = IK.createInverseJacobian(jacobian);
+        inverseJacobian = IK.createInverseJacobian(jacobian, 5);
 
+        // new delta angles = J^-1 * delta_X * dt
         newState = (inverseJacobian.x($V([e_delta.x, e_delta.y, e_delta.z, theta_delta.x, theta_delta.y, theta_delta.z]))).x(0.08).elements;
         //newState = (inverseJacobian.x($V([e_delta.x, e_delta.y, e_delta.z]))).x(0.08).elements;
 
@@ -157,7 +109,11 @@ IK.main = function (){
     render();
 };
 
-
+/**
+* returns a jacobian matrix with 'numBones' columns where each column has 6 rows.
+* first three are x, y and z values of the vector = rotationAxis X BoneJoint-To-EndEffector-Vector
+* and the other three are x, y and z values of the rotationAxis alone.
+*/
 IK.createJacobian = function (boneChain) {
 
     var jacobianRows = [],
@@ -168,13 +124,12 @@ IK.createJacobian = function (boneChain) {
         r = new THREE.Vector3();
 
     for(var i = 0; i<numBones;i++){
-        // one row (later column after transpose): rotationAxis X (endEffector - joint[i])
-        
+        // one row (later column after transpose): ( rotationAxis X (endEffector - joint[i]) ) rotationAxis 
         endEffector = boneChain[numBones-1].getGlobalEndPos();
 
         row.crossVectors(boneChain[i].getGlobalRotationAxis(), r.subVectors(endEffector,boneChain[i].getGlobalStartPos()));  
         jacobianRows.push(row.toArray().concat(boneChain[i].getGlobalRotationAxis().toArray()));
-        //jacobianRows.push(row.toArray());
+
     }
     
     jacobian = $M(jacobianRows);
@@ -183,7 +138,11 @@ IK.createJacobian = function (boneChain) {
     return jacobian;
 };
 
-IK.createInverseJacobian =  function (jacobian){
+/**
+* Tries to inverse the jacobian, if unsuccessful, takes the 
+* pseudo inverse with damping constant lambda instead
+*/
+IK.createInverseJacobian =  function (jacobian, lambda){
 
     var inverseJacobian;
     if(jacobian.isSquare() && !jacobian.isSingular()){
@@ -191,8 +150,7 @@ IK.createInverseJacobian =  function (jacobian){
     } else {
         //pseudo inverse with damping
         //(A'*A + lambda*I)^-1*A'
-        var lambda = 5.0, //damping constant
-            square = jacobian.transpose().x(jacobian),
+        var square = jacobian.transpose().x(jacobian),
             dampedSquare = square.add(Sylvester.Matrix.I(square.rows()).x(Math.pow(lambda,2))),
             inverseDampedSquare = dampedSquare.inverse(),
             inverseJacobian = inverseDampedSquare.x(jacobian.transpose());    

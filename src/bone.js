@@ -18,14 +18,20 @@ var Bone = function (length, rotationAxis){
 };
 
 Bone.prototype = {
+
+    /**
+    * adds 'this' mesh as child to bone and puts the child 
+    * in right relative position
+    */
     connectTo: function (bone){
         bone.boneMesh.add(this.boneMesh);
-        //this.boneMesh.position.y += bone.length;
         this.boneMesh.translateY(bone.length/2 + this.length/2);
-        console.log(bone.length);
-       // this.boneMesh.position.x += 2;
     },
 
+    /**
+    * Updates the rotation around a bones rotation axis
+    * with theta radians
+    */
     update: function (theta){
 
         this.boneMesh.translateY(-this.length/2);
@@ -36,7 +42,9 @@ Bone.prototype = {
 
     },
 
-    //returns the endpoint in global coordinates
+    /**
+    * returns the endpoint of the bone in global coordinates
+    */
     getGlobalEndPos: function (){
 
         var e = new THREE.Vector3(0, this.length/2, 0);
@@ -44,6 +52,9 @@ Bone.prototype = {
         return this.boneMesh.localToWorld(e);
     },
 
+    /**
+    * returns the start point of the bone in global coordinates
+    */
     getGlobalStartPos: function (){
 
         var e = new THREE.Vector3(0, -this.length/2, 0);
@@ -51,6 +62,10 @@ Bone.prototype = {
         return this.boneMesh.localToWorld(e);
     },
 
+    /**
+    * converts and returns the local rotation axis into
+    * world space coordinates
+    */
     getGlobalRotationAxis: function (){
         //console.log(this.boneMesh.worldToLocal(this.rotationAxis.clone()));
         var axis = this.rotationAxis.clone();
@@ -60,6 +75,11 @@ Bone.prototype = {
         return axis;
     },
 
+    /**
+    * converts and returns a local axis into
+    * world space coordinates
+    * axis number 1 = x, 2 = y, 3 = z
+    */
     getGlobalAxis: function (axis_number){
         //console.log(this.boneMesh.worldToLocal(this.rotationAxis.clone()));
         var axis;
