@@ -26,6 +26,8 @@ IK.main = function (){
         jacobian,
         inverseJacobian,
         endEffector,
+        secondaryTaskValues = Sylvester.Vector.Zero(numBones), // when boneChain is constrained somewhere
+        secondaryTask,
         lastBone, // will be set as boneChain[numBones-1]
         e_delta = new THREE.Vector3(), //vector from end effector to target position
         theta_delta = new THREE.Euler(), //angle from lastbone to target vector
@@ -78,6 +80,12 @@ IK.main = function (){
              bone.update(newState[i]);         
     }
 
+    function updateSecondaryTaskValues(bone, i){
+        if(i!==0){
+            secondaryTaskValues.elements[i] = boneChain[i].constraint;
+        }
+    }
+
     var render = function () {
         requestAnimationFrame( render );
 
@@ -97,11 +105,16 @@ IK.main = function (){
         
         //creating a jacobian and inversing it
         jacobian = IK.createJacobian(boneChain);
-        inverseJacobian = IK.createInverseJacobian(jacobian, 5);
+        inverseJacobian = IK.createInverseJacobian(jacobian, 10);
 
+        boneChain.forEach(updateSecondaryTaskValues);
+
+        secondaryTask = (Sylvester.Matrix.I(numBones).subtract(inverseJacobian.x(jacobian))).x(secondaryTaskValues);
         // new delta angles = J^-1 * delta_X * dt
-        newState = (inverseJacobian.x($V([e_delta.x, e_delta.y, e_delta.z, theta_delta.x, theta_delta.y, theta_delta.z]))).x(0.08).elements;
-        //newState = (inverseJacobian.x($V([e_delta.x, e_delta.y, e_delta.z]))).x(0.08).elements;
+        newState = (inverseJacobian.x(
+            $V([e_delta.x, e_delta.y, e_delta.z, theta_delta.x, theta_delta.y, theta_delta.z])
+            ).add(secondaryTask)
+            ).x(0.016).elements;
 
         boneChain.forEach(updatePosition);
         renderer.render(scene, camera);

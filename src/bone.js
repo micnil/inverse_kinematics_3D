@@ -3,6 +3,9 @@
 
 var Bone = function (length, rotationAxis){
 
+    this.constraint=0; // the value used for second task
+    this.jointLimit=1.2; //after this angle of rotation the rotation stops
+    this.constraintAmplifier=0.0; //how much (%) of the rotation should be used as constraint
     this.length = length || 10;
     this.rotationAxis = rotationAxis || new THREE.Vector3(1, 0, 0);
     this.geometry = new THREE.CylinderGeometry( 0.5, 0.5, this.length, 32);
@@ -34,10 +37,16 @@ Bone.prototype = {
     */
     update: function (theta){
 
-            this.boneMesh.translateY(-this.length/2);
-            this.boneMesh.rotateOnAxis(this.rotationAxis, theta);
-            this.boneMesh.translateY(this.length/2);
- 
+        //Constraint calculation
+        this.constraintAmplifier = (Math.abs(this.boneMesh.rotation.x + theta) - 0.8) / (this.jointLimit-0.8);
+        this.constraintAmplifier = Math.min(Math.max(this.constraintAmplifier, 0.0), 1.0);
+        this.constraint = (-this.boneMesh.rotation.x)*this.constraintAmplifier ;
+
+        this.boneMesh.translateY(-this.length/2);
+        this.boneMesh.rotateOnAxis(this.rotationAxis, theta);
+        this.boneMesh.translateY(this.length/2);
+  
+
     },
 
     /**
