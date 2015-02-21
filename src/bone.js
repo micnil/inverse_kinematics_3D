@@ -34,12 +34,10 @@ Bone.prototype = {
     */
     update: function (theta){
 
-        this.boneMesh.translateY(-this.length/2);
-
-        this.boneMesh.rotateOnAxis(this.rotationAxis, theta);
-
-        this.boneMesh.translateY(this.length/2);
-
+            this.boneMesh.translateY(-this.length/2);
+            this.boneMesh.rotateOnAxis(this.rotationAxis, theta);
+            this.boneMesh.translateY(this.length/2);
+ 
     },
 
     /**
