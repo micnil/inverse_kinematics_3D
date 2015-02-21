@@ -15,11 +15,13 @@ IK.mouse = new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.Mesh
         emissive: '#006063',
         shininess: 100 } ) );       
 
+IK.scene = new THREE.Scene();
+
+IK.loader = new THREE.JSONLoader(true);
 
 IK.main = function (){
 
-    var scene = new THREE.Scene(),
-        camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 ),
+    var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 ),
         renderer = new THREE.WebGLRenderer(),
         numBones = 10,
         boneChain = [],
@@ -29,66 +31,81 @@ IK.main = function (){
         secondaryTaskValues = Sylvester.Vector.Zero(numBones), // when boneChain is constrained somewhere
         secondaryTask,
         lastBone, // will be set as boneChain[numBones-1]
+        meshUrlArray = ["json/bottomBone.js", "json/bone.js"], //put in order you want them to load
+        meshes = [], // array with the actual meshes; 
         e_delta = new THREE.Vector3(), //vector from end effector to target position
         theta_delta = new THREE.Euler(), //angle from lastbone to target vector
         newState; //new state of the boneChain (only delta angles)
 
-
-    
+    //initializing renderer
     renderer.setSize( window.innerWidth, window.innerHeight );
     document.getElementById("container").appendChild( renderer.domElement );
     
     //add listeners
     document.addEventListener('keydown', function (event){
-        IK.event.keyListener(event, camera)});
+        IK.event.keyListener(event, camera); });
 
     document.addEventListener('mousemove', function (event){
-        IK.event.mouseMoveListener(event, camera)});
+        IK.event.mouseMoveListener(event, camera); });
 
     // add subtle ambient lighting
     var ambientLight = new THREE.AmbientLight(0x222222);
-    scene.add(ambientLight);
+    IK.scene.add(ambientLight);
 
     // directional lighting
     var directionalLight = new THREE.DirectionalLight(0xffffff);
     directionalLight.position.set(1, 1, 1).normalize();
-    scene.add(directionalLight);
+    IK.scene.add(directionalLight);
 
     //create mouse pointer
     IK.mouse.position.set(0, 20, 0);
-    scene.add(IK.mouse);
+    IK.scene.add(IK.mouse);
 
-    
-    // create bone chain
-    boneChain.push(new Bone(1, new THREE.Vector3(0, 1, 0)));
-    for(var i = 0; i<numBones-1; i++){
-        boneChain.push(new Bone(5, new THREE.Vector3(1, 0, 0)));    
+    //needs to be called after meshes are loaded
+    function createBoneChain(){
+        boneChain.push(new Bone(1, new THREE.Vector3(0, 1, 0), IK.scene, meshes[0].clone()));
+        for(var i = 1; i<numBones; i++){
+            boneChain.push(new Bone(5, new THREE.Vector3(1, 0, 0), boneChain[i-1], meshes[1].clone()));
+        }
+        lastBone = boneChain[numBones-1];
+        //when bones are done, ready to render.
+        render();
     }
-    lastBone = boneChain[numBones-1];
-    
 
-    // add bones to scene
-    boneChain.forEach(function (bone, i){
-        if(i<numBones-1)
-            boneChain[i+1].connectTo(bone);
-    });
-    boneChain[0].boneMesh.position.y += boneChain[0].length/2;
-    scene.add(boneChain[0].boneMesh);
+    //load meshes and then calls callback function. BEAUTIFUL :)
+    function loadMeshes(URLs, callback){
+        IK.loader.load( URLs.shift(), function (geometry, material){ 
 
-    camera.position.z = 50;
+            meshes.push(new THREE.Mesh(geometry, material[0]));
+
+            if (URLs.length){
+                loadMeshes(URLs, callback);
+            } else {
+                callback();
+            } 
+        });
+    } 
+
+    loadMeshes(meshUrlArray, createBoneChain);
+
     function updatePosition(bone, i){
              bone.update(newState[i]);         
     }
 
     function updateSecondaryTaskValues(bone, i){
         if(i!==0){
-            secondaryTaskValues.elements[i] = boneChain[i].constraint;
+            secondaryTaskValues.elements[i] = bone.constraint;
         }
     }
 
+    //setup camera
+    camera.position.z = 50;
+    camera.position.y = 50;
+    camera.lookAt(new THREE.Vector3(0,20,0));
+
     var render = function () {
         requestAnimationFrame( render );
-
+        
         //variables needed for theta_delta
         var vectorFrom = lastBone.getGlobalAxis(2),
             vectorTo = new THREE.Vector3(),
@@ -117,9 +134,8 @@ IK.main = function (){
             ).x(0.016).elements;
 
         boneChain.forEach(updatePosition);
-        renderer.render(scene, camera);
+        renderer.render(IK.scene, camera);
     };
-    render();
 };
 
 /**
@@ -142,9 +158,9 @@ IK.createJacobian = function (boneChain) {
 
         row.crossVectors(boneChain[i].getGlobalRotationAxis(), r.subVectors(endEffector,boneChain[i].getGlobalStartPos()));  
         jacobianRows.push(row.toArray().concat(boneChain[i].getGlobalRotationAxis().toArray()));
-
+        //jacobianRows.push(row.toArray());
     }
-    
+
     jacobian = $M(jacobianRows);
     jacobian = jacobian.transpose();
 
@@ -165,8 +181,9 @@ IK.createInverseJacobian =  function (jacobian, lambda){
         //(A'*A + lambda*I)^-1*A'
         var square = jacobian.transpose().x(jacobian),
             dampedSquare = square.add(Sylvester.Matrix.I(square.rows()).x(Math.pow(lambda,2))),
-            inverseDampedSquare = dampedSquare.inverse(),
-            inverseJacobian = inverseDampedSquare.x(jacobian.transpose());    
+            inverseDampedSquare = dampedSquare.inverse(); 
+
+        inverseJacobian = inverseDampedSquare.x(jacobian.transpose())   
     }
 
     return inverseJacobian;
