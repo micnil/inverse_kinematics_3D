@@ -9,6 +9,10 @@ var IK = IK || {};
 
 IK.world = new CANNON.World();
 
+IK.boxBase = {
+    position: function() {return new THREE.Vector3(20,20,20)}
+};
+
 IK.mouse = new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.MeshPhongMaterial( {
         // light
         specular: '#a9fcff',
@@ -35,6 +39,10 @@ IK.main = function (){
         secondaryTaskValues = Sylvester.Vector.Zero(numBones), // when boneChain is constrained somewhere
         secondaryTask,
         lastBone, // will be set as boneChain[numBones-1]
+        target,
+        movingBoxIndex,
+        boneBaseRotating = false, //when bonechain gets stuck bonebase must rotate
+        boneBaseRotationSpeed = 0,
         meshUrlArray = ["json/bottomBone.js", "json/bone.js"], //put in order you want them to load
         meshes = [], // array with the actual meshes; 
         e_delta = new THREE.Vector3(), //vector from end effector to target position
@@ -103,27 +111,10 @@ IK.main = function (){
 
     //create boxes
     while (numBoxes--){
-        //Three shapes
-        var boxGeometry = new THREE.SphereGeometry( 1),
-            boxMaterial = new THREE.MeshPhongMaterial( {
-                ambient: 0x030303, 
-                color: 0x00ff00, 
-                specular: 0x009900, 
-                shininess: 30, 
-                shading: THREE.FlatShading} );
-            var boxMesh = new THREE.Mesh( boxGeometry, boxMaterial );
-        boxes.push(boxMesh);
-        scene.add(boxMesh);
-
-        //Cannon bodies
-        var boxShape = new CANNON.Box(new CANNON.Vec3(1,1,1)),
-            boxBody = new CANNON.Body({
-                mass: 10
-            });
-        boxBody.addShape(boxShape);
-        boxBody.position.set(-10,5 + numBoxes*2,-10);
-        boxBodies.push(boxBody);
-        IK.world.add(boxBody);
+        var box = new Box(-10,5 + numBoxes*2,-10);
+        boxes.push(box);
+        scene.add(box.boxMesh);
+        IK.world.add(box.boxBody);
     }
 
     //needs to be called after meshes are loaded
@@ -154,10 +145,43 @@ IK.main = function (){
     loadMeshes(meshUrlArray, createBoneChain);
 
     function updatePosition(bone, i){
-             bone.update(newState[i]);         
+        if(i===0){
+            secondaryTaskValues.elements[i] = newState[i] * 40;
+        }
+        bone.update(newState[i]);         
     }
 
     function updateSecondaryTaskValues(bone, i){
+
+        //check if total rotation is over 4 rad. 
+        //if it is, add secondarytask value to base bone
+        if(boneBaseRotating){
+            boneBaseRotationSpeed += 0.005;
+            var topSpeed = 5,
+                taskValue = Math.sin(boneBaseRotationSpeed) * topSpeed;
+
+            secondaryTaskValues.elements[0] = taskValue;
+ 
+            if(taskValue < 0){
+                boneBaseRotationSpeed=0;
+                boneBaseRotating=0;
+                secondaryTaskValues.elements[0] = 0;
+            }
+
+        } else {
+            var totalRotation=0;
+
+            boneChain.forEach(function (bone, i){
+                if(i>2){
+                    totalRotation += bone.boneMesh.rotation.x;
+                }
+            });
+            //console.log(totalRotation);
+            if(Math.abs(totalRotation) >= 1.5 * Math.PI){
+                boneBaseRotating = true;
+            }
+        }
+
         if(i!==0){
             secondaryTaskValues.elements[i] = bone.constraint;
         }
@@ -168,15 +192,34 @@ IK.main = function (){
         IK.world.step(0.016);
 
         boxes.forEach(function (box, i){
-            box.position.copy(boxBodies[i].position);
-            box.quaternion.copy(boxBodies[i].quaternion);
+            if(box.physicsEnabled){
+                box.moveMeshToBody();    
+            }
         });
+    }
+
+    function getClosestBox(){
+
+        var closest = 100,
+            length;
+        boxes.forEach(function (box, i){
+            length = box.boxMesh.position.length();
+            if(length < closest){
+                 closest = length;
+                 movingBoxIndex = i;
+            }
+        });
+
+        return boxes[movingBoxIndex];
     }
 
     //setup camera
     camera.position.z = 70;
     camera.position.y = 50;
     camera.lookAt(new THREE.Vector3(0,10,0));
+
+    //set first target
+    target = getClosestBox();
 
     var render = function () {
         requestAnimationFrame( render );
@@ -187,20 +230,43 @@ IK.main = function (){
         var vectorFrom = lastBone.getGlobalAxis(new THREE.Vector3(0,1,0)),
             vectorTo = new THREE.Vector3(),
             q = new THREE.Quaternion();
-            
+        
         //angle delta
-        vectorTo.subVectors(IK.mouse.position, lastBone.getGlobalStartPos());
+        vectorTo.subVectors(target.position(), lastBone.getGlobalStartPos());
         q.setFromUnitVectors(vectorFrom.normalize(), vectorTo.normalize());
         theta_delta.setFromQuaternion(q); 
 
         //positional delta
         endEffector = lastBone.getGlobalEndPos();
-        e_delta.subVectors(IK.mouse.position, endEffector);
+        e_delta.subVectors(target.position(), endEffector);
+
+        //Reached target?
+        if(e_delta.length() < 0.5){
+            if (target instanceof Box){
+                //pick up cube and change target to position (Vector3) above circle
+                IK.world.remove(target.boxBody);
+                target.physicsEnabled = false;
+                THREE.SceneUtils.attach(target.boxMesh, scene, lastBone.boneMesh);
+                target = IK.boxBase;
+            } else {
+                //drop cube and find next target.
+                IK.world.add(boxes[movingBoxIndex].boxBody);
+                boxes[movingBoxIndex].physicsEnabled = true;
+                boxes[movingBoxIndex].boxMesh = lastBone.boneMesh.children[0];
+                THREE.SceneUtils.detach(lastBone.boneMesh.children[0], lastBone.boneMesh, scene);
+                boxes[movingBoxIndex].moveBodyToMesh();
+
+                //Rebuild box array
+
+                target = getClosestBox();
+            }
+        }
         
         //creating a jacobian and inversing it
         jacobian = IK.createJacobian(boneChain);
         inverseJacobian = IK.createInverseJacobian(jacobian, 10);
 
+        //update secondary task values
         boneChain.forEach(updateSecondaryTaskValues);
 
         secondaryTask = (Sylvester.Matrix.I(numBones).subtract(inverseJacobian.x(jacobian))).x(secondaryTaskValues);
