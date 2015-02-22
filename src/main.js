@@ -3,6 +3,7 @@
 /*global Sylvester */
 /*global $M */
 /*global $V */
+/*global $THREE */
 
 var IK = IK || {};
 
@@ -15,13 +16,11 @@ IK.mouse = new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.Mesh
         emissive: '#006063',
         shininess: 100 } ) );       
 
-IK.scene = new THREE.Scene();
-
-IK.loader = new THREE.JSONLoader(true);
-
 IK.main = function (){
 
-    var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 ),
+    var scene = new THREE.Scene(),
+        loader = new THREE.JSONLoader(),
+        camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 ),
         renderer = new THREE.WebGLRenderer(),
         numBones = 10,
         boneChain = [],
@@ -40,6 +39,7 @@ IK.main = function (){
     //initializing renderer
     renderer.setSize( window.innerWidth, window.innerHeight );
     document.getElementById("container").appendChild( renderer.domElement );
+    renderer.shadowMapEnabled = true;
     
     //add listeners
     document.addEventListener('keydown', function (event){
@@ -50,20 +50,39 @@ IK.main = function (){
 
     // add subtle ambient lighting
     var ambientLight = new THREE.AmbientLight(0x222222);
-    IK.scene.add(ambientLight);
+    scene.add(ambientLight);
 
     // directional lighting
-    var directionalLight = new THREE.DirectionalLight(0xffffff);
+/*    var directionalLight = new THREE.DirectionalLight(0xffffff);
     directionalLight.position.set(1, 1, 1).normalize();
-    IK.scene.add(directionalLight);
+    scene.add(directionalLight);*/
+var spotLight = new THREE.SpotLight( 0xffff88 );
+    spotLight.position.set( 100, 100, 100 );
+
+    spotLight.castShadow = true;
+    spotLight.shadowMapWidth = 1024;
+    spotLight.shadowMapHeight = 1024;
+
+    spotLight.shadowCameraNear = 50;
+    spotLight.shadowCameraFar = 300;
+    spotLight.shadowCameraFov = 30;
+    scene.add(spotLight);
 
     //create mouse pointer
     IK.mouse.position.set(0, 20, 0);
-    IK.scene.add(IK.mouse);
+    scene.add(IK.mouse);
+
+    //create ground
+    var geometry = new THREE.PlaneGeometry( 100, 100, 100, 100),
+        material = new THREE.MeshPhongMaterial( {ambient: 0x030303, color: 0xdddddd, specular: 0x009900, shininess: 30, shading: THREE.FlatShading} ),
+        plane = new THREE.Mesh( geometry, material );
+    plane.rotation.x -= Math.PI / 2;
+    plane.receiveShadow = true;
+    scene.add( plane );
 
     //needs to be called after meshes are loaded
     function createBoneChain(){
-        boneChain.push(new Bone(1, new THREE.Vector3(0, 1, 0), IK.scene, meshes[0].clone()));
+        boneChain.push(new Bone(1, new THREE.Vector3(0, 1, 0), scene, meshes[0].clone()));
         for(var i = 1; i<numBones; i++){
             boneChain.push(new Bone(5, new THREE.Vector3(1, 0, 0), boneChain[i-1], meshes[1].clone()));
         }
@@ -74,7 +93,7 @@ IK.main = function (){
 
     //load meshes and then calls callback function. BEAUTIFUL :)
     function loadMeshes(URLs, callback){
-        IK.loader.load( URLs.shift(), function (geometry, material){ 
+        loader.load( URLs.shift(), function (geometry, material){ 
 
             meshes.push(new THREE.Mesh(geometry, material[0]));
 
@@ -134,7 +153,7 @@ IK.main = function (){
             ).x(0.016).elements;
 
         boneChain.forEach(updatePosition);
-        renderer.render(IK.scene, camera);
+        renderer.render(scene, camera);
     };
 };
 
@@ -183,7 +202,7 @@ IK.createInverseJacobian =  function (jacobian, lambda){
             dampedSquare = square.add(Sylvester.Matrix.I(square.rows()).x(Math.pow(lambda,2))),
             inverseDampedSquare = dampedSquare.inverse(); 
 
-        inverseJacobian = inverseDampedSquare.x(jacobian.transpose())   
+        inverseJacobian = inverseDampedSquare.x(jacobian.transpose()); 
     }
 
     return inverseJacobian;

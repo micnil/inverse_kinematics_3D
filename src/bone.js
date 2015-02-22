@@ -9,14 +9,12 @@ var Bone = function (length, rotationAxis, parent, mesh){
     this.length = length || 10;
     this.rotationAxis = rotationAxis || new THREE.Vector3(1, 0, 0);
     this.boneMesh = mesh;
-    console.log("mesh: %s",this.boneMesh);
+    this.boneMesh.castShadow = true;
     if(parent instanceof Bone){
         parent.boneMesh.add(this.boneMesh);
-        console.log("parent: %s", this.boneMesh.parent);
         this.boneMesh.translateY(parent.length/2 + this.length/2);
     }else{
         parent.add(this.boneMesh);
-        console.log("parent: %s", this.boneMesh.parent);
     }
 };
 
