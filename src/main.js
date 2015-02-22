@@ -107,7 +107,7 @@ IK.main = function (){
         requestAnimationFrame( render );
         
         //variables needed for theta_delta
-        var vectorFrom = lastBone.getGlobalAxis(2),
+        var vectorFrom = lastBone.getGlobalAxis(new THREE.Vector3(0,1,0)),
             vectorTo = new THREE.Vector3(),
             q = new THREE.Quaternion();
             

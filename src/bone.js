@@ -23,15 +23,6 @@ var Bone = function (length, rotationAxis, parent, mesh){
 Bone.prototype = {
 
     /**
-    * adds 'this' mesh as child to bone and puts the child 
-    * in right relative position
-    */
-    connectTo: function (bone){
-        bone.boneMesh.add(this.boneMesh);
-        this.boneMesh.translateY(bone.length/2 + this.length/2);
-    },
-
-    /**
     * Updates the rotation around a bones rotation axis
     * with theta radians
     */
@@ -85,24 +76,8 @@ Bone.prototype = {
     /**
     * converts and returns a local axis into
     * world space coordinates
-    * axis number 1 = x, 2 = y, 3 = z
     */
-    getGlobalAxis: function (axis_number){
-        //console.log(this.boneMesh.worldToLocal(this.rotationAxis.clone()));
-        var axis;
-        switch (axis_number){
-            case 1:
-                axis = new THREE.Vector3(1, 0, 0);
-                break;
-            case 2:
-                axis = new THREE.Vector3(0, 1, 0);
-                break;
-            case 3:
-                axis = new THREE.Vector3(0, 0, 1);
-                break;
-            default:
-                console.log("wat?");
-        }
+    getGlobalAxis: function (axis){
 
         axis.transformDirection(this.boneMesh.matrixWorld);
 
