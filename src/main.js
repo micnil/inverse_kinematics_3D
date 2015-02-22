@@ -7,6 +7,8 @@
 
 var IK = IK || {};
 
+IK.world = new CANNON.World();
+
 IK.mouse = new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.MeshPhongMaterial( {
         // light
         specular: '#a9fcff',
@@ -20,10 +22,13 @@ IK.main = function (){
 
     var scene = new THREE.Scene(),
         loader = new THREE.JSONLoader(),
-        camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 ),
+        camera = new THREE.PerspectiveCamera( 45, window.innerWidth/window.innerHeight, 0.1, 1000 ),
         renderer = new THREE.WebGLRenderer(),
         numBones = 10,
+        numBoxes = 10,
         boneChain = [],
+        boxes = [],
+        boxBodies = [],
         jacobian,
         inverseJacobian,
         endEffector,
@@ -35,6 +40,10 @@ IK.main = function (){
         e_delta = new THREE.Vector3(), //vector from end effector to target position
         theta_delta = new THREE.Euler(), //angle from lastbone to target vector
         newState; //new state of the boneChain (only delta angles)
+
+    IK.world.gravity = new CANNON.Vec3(0, -40, 0); // m/s²
+    IK.world.broadphase = new CANNON.NaiveBroadphase();
+    IK.world.solver.iterations = 10;
 
     //initializing renderer
     renderer.setSize( window.innerWidth, window.innerHeight );
@@ -53,32 +62,69 @@ IK.main = function (){
     scene.add(ambientLight);
 
     // directional lighting
-/*    var directionalLight = new THREE.DirectionalLight(0xffffff);
-    directionalLight.position.set(1, 1, 1).normalize();
-    scene.add(directionalLight);*/
-var spotLight = new THREE.SpotLight( 0xffff88 );
-    spotLight.position.set( 100, 100, 100 );
+    var spotLight = new THREE.SpotLight( 0xffff88 );
+        spotLight.position.set( 100, 100, 100 );
 
-    spotLight.castShadow = true;
-    spotLight.shadowMapWidth = 1024;
-    spotLight.shadowMapHeight = 1024;
+        spotLight.castShadow = true;
+        spotLight.shadowMapWidth = 1024;
+        spotLight.shadowMapHeight = 1024;
 
-    spotLight.shadowCameraNear = 50;
-    spotLight.shadowCameraFar = 300;
-    spotLight.shadowCameraFov = 30;
-    scene.add(spotLight);
+        spotLight.shadowCameraNear = 50;
+        spotLight.shadowCameraFar = 300;
+        spotLight.shadowCameraFov = 30;
+        scene.add(spotLight);
 
-    //create mouse pointer
-    IK.mouse.position.set(0, 20, 0);
-    scene.add(IK.mouse);
+        //create mouse pointer
+        IK.mouse.position.set(0, 20, 0);
+        scene.add(IK.mouse);
 
     //create ground
-    var geometry = new THREE.PlaneGeometry( 100, 100, 100, 100),
-        material = new THREE.MeshPhongMaterial( {ambient: 0x030303, color: 0xdddddd, specular: 0x009900, shininess: 30, shading: THREE.FlatShading} ),
-        plane = new THREE.Mesh( geometry, material );
+    var planeGeometry = new THREE.PlaneGeometry( 100, 100, 100, 100),
+        planeMaterial = new THREE.MeshPhongMaterial( {
+            ambient: 0x030303,
+            color: 0xdddddd,
+            specular: 0x009900, 
+            shininess: 30, 
+            shading: THREE.FlatShading} ),
+        plane = new THREE.Mesh( planeGeometry, planeMaterial );
     plane.rotation.x -= Math.PI / 2;
     plane.receiveShadow = true;
     scene.add( plane );
+
+    //ground physics
+    var planeBody = new CANNON.Body({
+        mass: 0 // mass == 0 makes the body static 
+    });
+    var planeBodyShape = new CANNON.Plane();
+    planeBody.addShape(planeBodyShape);
+    planeBody.position.copy(plane.position);
+    planeBody.quaternion.copy(plane.quaternion);
+    IK.world.add(planeBody);
+
+    //create boxes
+    while (numBoxes--){
+        //Three shapes
+        var boxGeometry = new THREE.SphereGeometry( 1),
+            boxMaterial = new THREE.MeshPhongMaterial( {
+                ambient: 0x030303, 
+                color: 0x00ff00, 
+                specular: 0x009900, 
+                shininess: 30, 
+                shading: THREE.FlatShading} );
+            var boxMesh = new THREE.Mesh( boxGeometry, boxMaterial );
+        boxes.push(boxMesh);
+        scene.add(boxMesh);
+
+        //Cannon bodies
+        var boxShape = new CANNON.Box(new CANNON.Vec3(1,1,1)),
+            boxBody = new CANNON.Body({
+                mass: 10
+            });
+        boxBody.addShape(boxShape);
+        boxBody.position.set(-10,5 + numBoxes*2,-10);
+        boxBodies.push(boxBody);
+        IK.world.add(boxBody);
+    }
 
     //needs to be called after meshes are loaded
     function createBoneChain(){
@@ -117,14 +163,26 @@ var spotLight = new THREE.SpotLight( 0xffff88 );
         }
     }
 
+    function updatePhysics(){
+        // Step the physics world
+        IK.world.step(0.016);
+
+        boxes.forEach(function (box, i){
+            box.position.copy(boxBodies[i].position);
+            box.quaternion.copy(boxBodies[i].quaternion);
+        });
+    }
+
     //setup camera
-    camera.position.z = 50;
+    camera.position.z = 70;
     camera.position.y = 50;
-    camera.lookAt(new THREE.Vector3(0,20,0));
+    camera.lookAt(new THREE.Vector3(0,10,0));
 
     var render = function () {
         requestAnimationFrame( render );
-        
+
+        updatePhysics();
+
         //variables needed for theta_delta
         var vectorFrom = lastBone.getGlobalAxis(new THREE.Vector3(0,1,0)),
             vectorTo = new THREE.Vector3(),
