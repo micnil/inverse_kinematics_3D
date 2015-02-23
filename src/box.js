@@ -1,10 +1,27 @@
-var Box = function (x, y, z){
+var Box = function (id, x, y, z){
+
+    this.id = id;
+
+    switch(this.id){
+        case 1:
+            this.color = '#ff0000';
+            this.target = IK.boxBaseRed;
+            break;
+        case 2:
+            this.color = '#00ff00';
+            this.target = IK.boxBaseGreen;
+            break;      
+        case 3:  
+            this.color = '#0000ff';
+            this.target = IK.boxBaseBlue;
+            break;      
+    }
 
     //Three shapes
     var boxGeometry = new THREE.BoxGeometry(1, 1, 1),
         boxMaterial = new THREE.MeshPhongMaterial( {
             ambient: 0x030303, 
-            color: 0x00ff00, 
+            color: this.color, 
             specular: 0x009900, 
             shininess: 30, 
             shading: THREE.FlatShading} );

@@ -9,8 +9,14 @@ var IK = IK || {};
 
 IK.world = new CANNON.World();
 
-IK.boxBase = {
-    position: function() {return new THREE.Vector3(19,19,19)}
+IK.boxBaseRed = {
+    position: function() {return new THREE.Vector3(20,20,0)}
+};
+IK.boxBaseGreen = {
+    position: function() {return new THREE.Vector3(-20,20,0)}
+};
+IK.boxBaseBlue = {
+    position: function() {return new THREE.Vector3(0,20,20)}
 };
 
 IK.mouse = new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.MeshPhongMaterial( {
@@ -42,8 +48,6 @@ IK.main = function (){
         target,
         movingBoxIndex,
         angleToTarget,
-        boneBaseRotating = false, //when bonechain gets stuck bonebase must rotate
-        boneBaseRotationSpeed = 0,
         meshUrlArray = ["json/bottomBone.js", "json/bone.js"], //put in order you want them to load
         meshes = [], // array with the actual meshes; 
         e_delta = new THREE.Vector3(), //vector from end effector to target position
@@ -112,7 +116,8 @@ IK.main = function (){
 
     //create boxes
     while (numBoxes--){
-        var box = new Box(-10,5 + numBoxes*2,-10);
+        var randomID = Math.floor(Math.random() * (3 - 1 + 1)) + 1;
+        var box = new Box(randomID, -10,5 + numBoxes*2,-10);
         boxes.push(box);
         scene.add(box.boxMesh);
         IK.world.add(box.boxBody);
@@ -146,69 +151,33 @@ IK.main = function (){
     loadMeshes(meshUrlArray, createBoneChain);
 
     function updatePosition(bone, i){
-/*        if(i===0){
-            secondaryTaskValues.elements[i] = newState[i] * 40;
-        }*/
-        if(Math.abs(angleToTarget)>(1/3*Math.PI)){
-            var speed = (1/3*Math.PI)/Math.abs(angleToTarget);
+
+        if(Math.abs(angleToTarget)>(1/2*Math.PI)){
+            var speed = (1/2*Math.PI)/Math.abs(angleToTarget);
             if(i===0){
-                var temp = 1/speed - 1;
-                console.log(temp);
+                //var temp = 1.5/speed - 1.5;
+                var temp = 1.8*Math.sin(speed*Math.PI);
+
                 secondaryTaskValues.elements[i] = (angleToTarget>0) ? temp : -temp;
+
                 bone.update(newState[i]);
             }
             bone.update(newState[i]*speed);
             
         } else {
             if(i===0){
-                secondaryTaskValues.elements[i] = newState[i] * 20;
+                secondaryTaskValues.elements[i] = newState[i] * 40;
             }
             bone.update(newState[i]);
         }
-        
 
-/*
-        if(boneBaseRotating && i===0){
-            bone.update(newState[i]);         
-        } else if(!boneBaseRotating){
-            bone.update(newState[i]);
-        }*/
     }
 
     function updateSecondaryTaskValues(bone, i){
 
         if(i!==0){
             secondaryTaskValues.elements[i] = bone.constraint;
-        }// else {
-            //check if total rotation is over 4 rad. 
-            //if it is, add secondarytask value to base bone
-            /*if(boneBaseRotating){
-                boneBaseRotationSpeed += 0.05;
-                var topSpeed = 5,
-                    taskValue = Math.sin(boneBaseRotationSpeed) * topSpeed;
-
-                    secondaryTaskValues.elements[0] = taskValue;
-
-                if(taskValue < 0){
-                    boneBaseRotationSpeed=0;
-                    boneBaseRotating=0;
-                    secondaryTaskValues.elements[0] = 0;
-                }
-
-            } else {
-                var totalRotation=0;
-
-                boneChain.forEach(function (bone, i){
-                    if(i>2){
-                        totalRotation += bone.boneMesh.rotation.x;
-                    }
-                });
-
-                if(Math.abs(totalRotation) >= 1.5 * Math.PI){
-                    boneBaseRotating = true;
-                }
-            }
-        }*/
+        }
     }
 
     function updatePhysics(){
@@ -265,7 +234,7 @@ IK.main = function (){
         e_delta.subVectors(target.position(), endEffector);
 
         //if angle to target is to big, rotate bonebase a bit extra to not get stuck
-        angleToTarget = IK.getAngleToTarget(target.position(), boneChain[0].boneMesh.position, endEffector);
+        angleToTarget = IK.getAngleToTarget(target.position(), boneChain[0]);
 
         //Reached target?
         if(e_delta.length() < 0.8){
@@ -274,7 +243,7 @@ IK.main = function (){
                 IK.world.remove(target.boxBody);
                 target.physicsEnabled = false;
                 THREE.SceneUtils.attach(target.boxMesh, scene, lastBone.boneMesh);
-                target = IK.boxBase;
+                target = target.target;
             } else {
                 //drop cube and find next target.
                 IK.world.add(boxes[movingBoxIndex].boxBody);
@@ -301,8 +270,6 @@ IK.main = function (){
             $V([e_delta.x, e_delta.y, e_delta.z, theta_delta.x, theta_delta.y, theta_delta.z])
             ).add(secondaryTask)
             ).x(0.016).elements;
-
-
 
         boneChain.forEach(updatePosition);
         renderer.render(scene, camera);
@@ -360,13 +327,12 @@ IK.createInverseJacobian =  function (jacobian, lambda){
     return inverseJacobian;
 };
 
-IK.getAngleToTarget = function (target, boneChainPosition, endEffector){
+IK.getAngleToTarget = function (target, boneBase){
 
-    var vectorFrom = new THREE.Vector3(),
+    var vectorFrom = boneBase.getGlobalAxis(new THREE.Vector3(0, 0, -1)).projectOnPlane(new THREE.Vector3(0, 1, 0)),
         vectorTo = new THREE.Vector3(),
         angle;
-    vectorFrom.subVectors(target, boneChainPosition).projectOnPlane(new THREE.Vector3(0, 1, 0));
-    vectorTo.subVectors(endEffector, boneChainPosition).projectOnPlane(new THREE.Vector3(0, 1, 0));
+    vectorTo.subVectors(target, boneBase.boneMesh.position).projectOnPlane(new THREE.Vector3(0, 1, 0));
     angle = vectorFrom.angleTo(vectorTo);
     return angle;
 
