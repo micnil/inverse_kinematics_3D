@@ -27,6 +27,8 @@ var Box = function (id, x, y, z){
             shading: THREE.FlatShading} );
 
     this.boxMesh = new THREE.Mesh( boxGeometry, boxMaterial );
+    this.boxMesh.castShadow = true;
+
     //Cannon bodies
     var boxShape = new CANNON.Box(new CANNON.Vec3(0.5,0.5,0.5));
 

@@ -18,6 +18,11 @@ IK.boxBaseGreen = {
 IK.boxBaseBlue = {
     position: function() {return new THREE.Vector3(0,20,20)}
 };
+IK.startingPos = {
+    pos: new THREE.Vector3(0,16,-20),
+    position: function() {return IK.startingPos.pos}
+};
+
 
 IK.mouse = new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.MeshPhongMaterial( {
         // light
@@ -35,10 +40,10 @@ IK.main = function (){
         camera = new THREE.PerspectiveCamera( 45, window.innerWidth/window.innerHeight, 0.1, 1000 ),
         renderer = new THREE.WebGLRenderer(),
         numBones = 10,
-        numBoxes = 10,
+        numBoxes = 20,
         boneChain = [],
         boxes = [],
-        boxBodies = [],
+        movableBoxes = [],
         jacobian,
         inverseJacobian,
         endEffector,
@@ -48,6 +53,7 @@ IK.main = function (){
         target,
         movingBoxIndex,
         angleToTarget,
+        restTime=0,
         meshUrlArray = ["json/bottomBone.js", "json/bone.js"], //put in order you want them to load
         meshes = [], // array with the actual meshes; 
         e_delta = new THREE.Vector3(), //vector from end effector to target position
@@ -56,7 +62,7 @@ IK.main = function (){
 
     IK.world.gravity = new CANNON.Vec3(0, -40, 0); // m/s²
     IK.world.broadphase = new CANNON.NaiveBroadphase();
-    IK.world.solver.iterations = 10;
+    IK.world.solver.iterations = 5;
 
     //initializing renderer
     renderer.setSize( window.innerWidth, window.innerHeight );
@@ -92,7 +98,7 @@ IK.main = function (){
         //scene.add(IK.mouse);
 
     //create ground
-    var planeGeometry = new THREE.PlaneGeometry( 100, 100, 100, 100),
+    var planeGeometry = new THREE.PlaneGeometry( 120, 120, 50, 50),
         planeMaterial = new THREE.MeshPhongMaterial( {
             ambient: 0x030303,
             color: 0xdddddd,
@@ -117,7 +123,7 @@ IK.main = function (){
     //create boxes
     while (numBoxes--){
         var randomID = Math.floor(Math.random() * (3 - 1 + 1)) + 1;
-        var box = new Box(randomID, -10,5 + numBoxes*2,-10);
+        var box = new Box(randomID, 0,5 + numBoxes*2,-15);
         boxes.push(box);
         scene.add(box.boxMesh);
         IK.world.add(box.boxBody);
@@ -155,8 +161,8 @@ IK.main = function (){
         if(Math.abs(angleToTarget)>(1/2*Math.PI)){
             var speed = (1/2*Math.PI)/Math.abs(angleToTarget);
             if(i===0){
-                //var temp = 1.5/speed - 1.5;
-                var temp = 1.8*Math.sin(speed*Math.PI);
+                var temp = 1.5/speed - 1.5;
+                //var temp = 2.0*Math.sin(speed*Math.PI);
 
                 secondaryTaskValues.elements[i] = (angleToTarget>0) ? temp : -temp;
 
@@ -177,7 +183,8 @@ IK.main = function (){
 
         if(i!==0){
             secondaryTaskValues.elements[i] = bone.constraint;
-        }
+        } 
+
     }
 
     function updatePhysics(){
@@ -195,7 +202,7 @@ IK.main = function (){
 
         var closest = 100,
             length;
-        boxes.forEach(function (box, i){
+        movableBoxes.forEach(function (box, i){
             length = box.boxMesh.position.length();
             if(length < closest){
                  closest = length;
@@ -203,15 +210,17 @@ IK.main = function (){
             }
         });
 
-        return boxes[movingBoxIndex];
+        return movableBoxes[movingBoxIndex];
     }
 
     //setup camera
     camera.position.z = 70;
     camera.position.y = 50;
+    camera.position.x = -50;
     camera.lookAt(new THREE.Vector3(0,10,0));
 
     //set first target
+    movableBoxes = IK.getMovableBoxes(boxes);
     target = getClosestBox();
 
     var render = function () {
@@ -244,16 +253,28 @@ IK.main = function (){
                 target.physicsEnabled = false;
                 THREE.SceneUtils.attach(target.boxMesh, scene, lastBone.boneMesh);
                 target = target.target;
+            } else if(target === IK.startingPos){
+                movableBoxes = IK.getMovableBoxes(boxes);
+                if(movableBoxes.length){
+                   target = getClosestBox();
+                } else {
+                    restTime = (restTime>1) ? 0.0 : restTime + 0.1,
+                    target.pos.y += Math.sin(restTime*2*Math.PI)*2; 
+                }
             } else {
                 //drop cube and find next target.
-                IK.world.add(boxes[movingBoxIndex].boxBody);
-                boxes[movingBoxIndex].physicsEnabled = true;
-                boxes[movingBoxIndex].boxMesh = lastBone.boneMesh.children[0];
+                IK.world.add(movableBoxes[movingBoxIndex].boxBody);
+                movableBoxes[movingBoxIndex].physicsEnabled = true;
+                movableBoxes[movingBoxIndex].boxMesh = lastBone.boneMesh.children[0];
                 THREE.SceneUtils.detach(lastBone.boneMesh.children[0], lastBone.boneMesh, scene);
-                boxes[movingBoxIndex].moveBodyToMesh();
+                movableBoxes[movingBoxIndex].moveBodyToMesh();
                 //TODO: Rebuild box array
-
+                movableBoxes = IK.getMovableBoxes(boxes);
+                if(movableBoxes.length){
                 target = getClosestBox();
+                } else {
+                    target = IK.startingPos;
+                }
             }
         }
         
@@ -269,8 +290,7 @@ IK.main = function (){
         newState = (inverseJacobian.x(
             $V([e_delta.x, e_delta.y, e_delta.z, theta_delta.x, theta_delta.y, theta_delta.z])
             ).add(secondaryTask)
-            ).x(0.016).elements;
-
+            ).x(0.024).elements;
         boneChain.forEach(updatePosition);
         renderer.render(scene, camera);
     };
@@ -296,7 +316,6 @@ IK.createJacobian = function (boneChain) {
 
         row.crossVectors(boneChain[i].getGlobalRotationAxis(), r.subVectors(endEffector,boneChain[i].getGlobalStartPos()));  
         jacobianRows.push(row.toArray().concat(boneChain[i].getGlobalRotationAxis().toArray()));
-        //jacobianRows.push(row.toArray());
     }
 
     jacobian = $M(jacobianRows);
@@ -332,8 +351,26 @@ IK.getAngleToTarget = function (target, boneBase){
     var vectorFrom = boneBase.getGlobalAxis(new THREE.Vector3(0, 0, -1)).projectOnPlane(new THREE.Vector3(0, 1, 0)),
         vectorTo = new THREE.Vector3(),
         angle;
+
     vectorTo.subVectors(target, boneBase.boneMesh.position).projectOnPlane(new THREE.Vector3(0, 1, 0));
     angle = vectorFrom.angleTo(vectorTo);
+
+    if((vectorTo.x*vectorFrom.z - vectorFrom.x*vectorTo.z)<0){
+        angle = -angle;
+    }
+
     return angle;
 
+}
+
+IK.getMovableBoxes = function (boxes){
+
+    var movableBoxes = [];
+    boxes.forEach(function(box, i){
+        var distanceFromBase = new THREE.Vector3().subVectors(box.position(), box.target.position()).length();
+        if(distanceFromBase>20){
+            movableBoxes.push(box);
+        }
+    });
+    return movableBoxes;
 }
