@@ -24,14 +24,18 @@ IK.startingPos = {
 };
 
 
-IK.mouse = new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.MeshPhongMaterial( {
-        // light
+IK.mouse = { 
+
+    mouseMesh: new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.MeshPhongMaterial( {
         specular: '#a9fcff',
-        // intermediate
-        color: '#00FF00',
-        // dark
-        emissive: '#006063',
-        shininess: 100 } ) );       
+        color: '#555555',
+        emissive: '#606063',
+        shininess: 50 } ) ),
+
+    mouseBody: new CANNON.Body({
+            mass: 0
+        })
+};
 
 IK.main = function (){
 
@@ -70,8 +74,8 @@ IK.main = function (){
     renderer.shadowMapEnabled = true;
     
     //add listeners
-    document.addEventListener('keydown', function (event){
-        IK.event.keyListener(event, camera); });
+    document.addEventListener('wheel', function (event){
+        IK.event.wheelListener(event, camera); });
 
     document.addEventListener('mousemove', function (event){
         IK.event.mouseMoveListener(event, camera); });
@@ -93,9 +97,11 @@ IK.main = function (){
         spotLight.shadowCameraFov = 30;
         scene.add(spotLight);
 
-        //create mouse pointer
-        IK.mouse.position.set(0, 20, 0);
-        //scene.add(IK.mouse);
+    //create mouse pointer
+    //IK.mouse.position.set(0, 20, 0);
+    scene.add(IK.mouse.mouseMesh);
+    IK.mouse.mouseBody.addShape(new CANNON.Sphere(2))
+    IK.world.add(IK.mouse.mouseBody);
 
     //create ground
     var planeGeometry = new THREE.PlaneGeometry( 120, 120, 50, 50),

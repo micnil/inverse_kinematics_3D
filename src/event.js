@@ -1,5 +1,5 @@
 IK.event = {
-    keyListener: function (e, camera){
+/*    keyListener: function (e, camera){
         e = e || event; // to deal with IE
 
         var dir = IK.mouse.position.sub( camera.position );
@@ -16,6 +16,27 @@ IK.event = {
         var pos = camera.position.clone().add( dir.multiplyScalar( distance ));
 
         IK.mouse.position.set(pos.x, pos.y, pos.z);
+
+    },*/
+
+    wheelListener: function (e, camera){
+        e = e || event; // to deal with IE
+
+        var dir = IK.mouse.mouseMesh.position.sub( camera.position );
+        var distance = dir.length();
+        dir.normalize();
+
+        if(e.wheelDelta>0){
+            distance += 4;
+        }else{
+            distance -= 4;
+        }
+
+        var pos = camera.position.clone().add( dir.multiplyScalar( distance ));
+
+        IK.mouse.mouseBody.position.set(pos.x, pos.y, pos.z);
+        IK.mouse.mouseMesh.position.copy(IK.mouse.mouseBody.position);
+        IK.mouse.mouseMesh.quaternion.copy(IK.mouse.mouseBody.quaternion);
 
     },
 
@@ -42,12 +63,12 @@ IK.event = {
 
             var dir = vector.sub( camera.position ).normalize();
 
-            var distance = IK.mouse.position.sub(camera.position).length();
+            var distance = IK.mouse.mouseMesh.position.sub(camera.position).length();
 
             var pos = camera.position.clone().add( dir.multiplyScalar( distance ) );
 
-            IK.mouse.position.x = pos.x;
-            IK.mouse.position.y = pos.y;
-            IK.mouse.position.z = pos.z;
+        IK.mouse.mouseBody.position.set(pos.x, pos.y, pos.z);
+        IK.mouse.mouseMesh.position.copy(IK.mouse.mouseBody.position);
+        IK.mouse.mouseMesh.quaternion.copy(IK.mouse.mouseBody.quaternion);
     }
 };
