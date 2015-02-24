@@ -23,26 +23,17 @@ IK.startingPos = {
     position: function() {return IK.startingPos.pos}
 };
 
-
-IK.mouse = { 
-
-    mouseMesh: new THREE.Mesh( new THREE.SphereGeometry( 1, 24, 24 ), new THREE.MeshPhongMaterial( {
-        specular: '#a9fcff',
-        color: '#555555',
-        emissive: '#606063',
-        shininess: 50 } ) ),
-
-    mouseBody: new CANNON.Body({
-            mass: 0
-        })
-};
-
+IK.scene = new THREE.Scene();
+IK.renderer = new THREE.WebGLRenderer();
+IK.camera = new THREE.PerspectiveCamera( 45, window.innerWidth/window.innerHeight, 0.1, 1000 );
+IK.mouse = new THREE.Vector2();
+IK.raycaster = new THREE.Raycaster();
+IK.impulsePosition = null;
+IK.selectedBox = null;
+IK.impulseForce = 200;
 IK.main = function (){
 
-    var scene = new THREE.Scene(),
-        loader = new THREE.JSONLoader(),
-        camera = new THREE.PerspectiveCamera( 45, window.innerWidth/window.innerHeight, 0.1, 1000 ),
-        renderer = new THREE.WebGLRenderer(),
+    var loader = new THREE.JSONLoader(),
         numBones = 10,
         numBoxes = 20,
         boneChain = [],
@@ -68,21 +59,20 @@ IK.main = function (){
     IK.world.solver.iterations = 5;
 
     //initializing renderer
-    renderer.setSize( window.innerWidth, window.innerHeight );
-    document.getElementById("container").appendChild( renderer.domElement );
-    renderer.shadowMapEnabled = true;
+    IK.renderer.setSize( window.innerWidth, window.innerHeight );
+    document.getElementById("container").appendChild( IK.renderer.domElement );
+    IK.renderer.shadowMapEnabled = true;
     
     //add listeners
-    document.addEventListener('wheel', function (e){
-        e = e || event; // to deal with IE
-        IK.event.wheelListener(e, camera); });
-
-    document.addEventListener('mousemove', function (event){
-        IK.event.mouseMoveListener(event, camera); });
+    document.addEventListener('wheel', IK.event.wheelListener);
+    document.addEventListener('mouseup', IK.event.mouseClickListener);
+    document.addEventListener('mousemove', IK.event.mouseMoveListener);
+    window.addEventListener( 'resize', IK.event.onWindowResize, false );
+    
 
     // add subtle ambient lighting
     var ambientLight = new THREE.AmbientLight(0x222222);
-    scene.add(ambientLight);
+    IK.scene.add(ambientLight);
 
     // directional lighting
     var spotLight = new THREE.SpotLight( 0xffff88 );
@@ -95,13 +85,7 @@ IK.main = function (){
         spotLight.shadowCameraNear = 50;
         spotLight.shadowCameraFar = 300;
         spotLight.shadowCameraFov = 30;
-        scene.add(spotLight);
-
-    //create mouse pointer
-    //IK.mouse.position.set(0, 20, 0);
-    scene.add(IK.mouse.mouseMesh);
-    IK.mouse.mouseBody.addShape(new CANNON.Sphere(2))
-    IK.world.add(IK.mouse.mouseBody);
+        IK.scene.add(spotLight);
 
     //create ground
     var planeGeometry = new THREE.PlaneGeometry( 120, 120, 50, 50),
@@ -114,7 +98,7 @@ IK.main = function (){
         plane = new THREE.Mesh( planeGeometry, planeMaterial );
     plane.rotation.x -= Math.PI / 2;
     plane.receiveShadow = true;
-    scene.add( plane );
+    IK.scene.add( plane );
 
     //ground physics
     var planeBody = new CANNON.Body({
@@ -127,17 +111,17 @@ IK.main = function (){
     IK.world.add(planeBody);
 
     //create boxes
-    while (numBoxes--){
-        var randomID = Math.floor(Math.random() * (3 - 1 + 1)) + 1;
-        var box = new Box(randomID, 0,5 + numBoxes*2,-15);
+    while(numBoxes--){
+        var randomType = Math.floor(Math.random() * (3 - 1 + 1)) + 1;
+        var box = new Box(randomType, 0,5 + numBoxes*2,-15);
         boxes.push(box);
-        scene.add(box.boxMesh);
-        IK.world.add(box.boxBody);
+        IK.scene.add(box.boxMesh);
+        IK.world.add(box.boxBody);        
     }
 
     //needs to be called after meshes are loaded
     function createBoneChain(){
-        boneChain.push(new Bone(1, new THREE.Vector3(0, 1, 0), scene, meshes[0].clone()));
+        boneChain.push(new Bone(1, new THREE.Vector3(0, 1, 0), IK.scene, meshes[0].clone()));
         for(var i = 1; i<numBones; i++){
             boneChain.push(new Bone(5, new THREE.Vector3(1, 0, 0), boneChain[i-1], meshes[1].clone()));
         }
@@ -169,7 +153,6 @@ IK.main = function (){
             if(i===0){
                 var temp = 1.5/speed - 1.5;
                 //var temp = 2.0*Math.sin(speed*Math.PI);
-
                 secondaryTaskValues.elements[i] = (angleToTarget>0) ? temp : -temp;
 
                 bone.update(newState[i]);
@@ -220,17 +203,25 @@ IK.main = function (){
     }
 
     //setup camera
-    camera.position.z = 70;
-    camera.position.y = 50;
-    camera.position.x = -50;
-    camera.lookAt(new THREE.Vector3(0,10,0));
+    IK.camera.position.z = 70;
+    IK.camera.position.y = 50;
+    IK.camera.position.x = -50;
+    IK.camera.lookAt(new THREE.Vector3(0,10,0));
 
     //set first target
     movableBoxes = IK.getMovableBoxes(boxes);
     target = getClosestBox();
 
     var render = function () {
-        requestAnimationFrame( render );
+        requestAnimationFrame( render );  
+
+        // repaint all boxes
+        boxes.forEach(function (box){
+            box.repaint();
+        });
+
+        //try to select a box under the mouse pointer
+        IK.selectBox(boxes);
 
         updatePhysics();
 
@@ -257,7 +248,7 @@ IK.main = function (){
                 //pick up cube and change target to position (Vector3) above circle
                 IK.world.remove(target.boxBody);
                 target.physicsEnabled = false;
-                THREE.SceneUtils.attach(target.boxMesh, scene, lastBone.boneMesh);
+                THREE.SceneUtils.attach(target.boxMesh, IK.scene, lastBone.boneMesh);
                 target = target.target;
             } else if(target === IK.startingPos){
                 movableBoxes = IK.getMovableBoxes(boxes);
@@ -271,7 +262,7 @@ IK.main = function (){
                 IK.world.add(movableBoxes[movingBoxIndex].boxBody);
                 movableBoxes[movingBoxIndex].physicsEnabled = true;
                 movableBoxes[movingBoxIndex].boxMesh = lastBone.boneMesh.children[0];
-                THREE.SceneUtils.detach(lastBone.boneMesh.children[0], lastBone.boneMesh, scene);
+                THREE.SceneUtils.detach(lastBone.boneMesh.children[0], lastBone.boneMesh, IK.scene);
                 movableBoxes[movingBoxIndex].moveBodyToMesh();
                 //Rebuild box array
                 movableBoxes = IK.getMovableBoxes(boxes);
@@ -297,7 +288,7 @@ IK.main = function (){
             ).add(secondaryTask)
             ).x(0.024).elements;
         boneChain.forEach(updatePosition);
-        renderer.render(scene, camera);
+        IK.renderer.render(IK.scene, IK.camera);
     };
 };
 
@@ -379,4 +370,25 @@ IK.getMovableBoxes = function (boxes){
         }
     });
     return movableBoxes;
+}
+
+IK.selectBox = function (boxes){
+
+    // update the picking ray with the camera and mouse position    
+    IK.raycaster.setFromCamera( IK.mouse, IK.camera ); 
+
+    // calculate objects intersecting the picking ray
+    var intersects = IK.raycaster.intersectObjects( IK.scene.children );
+    if(intersects[0] && intersects[0].object.geometry instanceof THREE.BoxGeometry){
+        boxes.forEach(function (box, i){
+            if(box.boxMesh.id === intersects[0].object.id){
+                box.highlight();
+                IK.impulsePosition = intersects[0].point;
+                IK.selectedBox = box;
+            }
+        });
+    } else {
+        IK.impulsePosition = null;
+        IK.selectedBox = null;
+    }
 }

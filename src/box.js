@@ -1,8 +1,7 @@
-var Box = function (id, x, y, z){
+var Box = function (type, x, y, z){
 
-    this.id = id;
-
-    switch(this.id){
+    this.type = type;
+    switch(this.type){
         case 1:
             this.color = '#ff0000';
             this.target = IK.boxBaseRed;
@@ -55,5 +54,34 @@ Box.prototype = {
 
     position: function (){
         return this.boxMesh.position;
+    },
+
+    highlight: function (){
+
+        switch(this.type){
+            case 1:
+                this.boxMesh.material.color.setRGB(1,0.7,0.7);
+                break;
+            case 2:
+                this.boxMesh.material.color.setRGB(0.7,1,0.7);
+                break;      
+            case 3:  
+                this.boxMesh.material.color.setRGB(1,0.7,0.7);
+                break;      
+        }
+    },
+    repaint: function (){
+
+        switch(this.type){
+            case 1:
+                this.boxMesh.material.color.setRGB(1,0,0);
+                break;
+            case 2:
+                this.boxMesh.material.color.setRGB(0,1,0);
+                break;      
+            case 3:  
+                this.boxMesh.material.color.setRGB(0,0,1);
+                break;      
+        }
     }
 }

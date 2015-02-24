@@ -1,54 +1,37 @@
 IK.event = {
 
-    wheelListener: function (e, camera){
-        e.preventDefault();
-        var dir = IK.mouse.mouseMesh.position.sub( camera.position );
-        var distance = dir.length();
-        dir.normalize();
-        if(distance>1){
-            if(e.deltaY>0){
-                distance -= 4;
-            }else if(e.deltaY<0){
-                distance += 4;
-            }
+    wheelListener: function (event){
 
-            var pos = camera.position.clone().add( dir.multiplyScalar( distance ));
+        if(event.deltaY>0){
+            IK.impulseForce -= 4;
+        }else if(event.deltaY<0){
+            IK.impulseForce += 4;
+        }
+        document.getElementById("info").innerHTML = "press cube to apply " + IK.impulseForce + " units of force. Scroll to appy more or less";
+    },
 
-            IK.mouse.mouseBody.position.set(pos.x, pos.y, pos.z);
-            IK.mouse.mouseMesh.position.copy(IK.mouse.mouseBody.position);
-            IK.mouse.mouseMesh.quaternion.copy(IK.mouse.mouseBody.quaternion);
+    mouseClickListener: function (event){
+        
+
+        if(IK.impulsePosition){
+            IK.selectedBox.boxBody.applyImpulse(new CANNON.Vec3(0,IK.impulseForce,0), 
+                                                new CANNON.Vec3().copy(IK.impulsePosition));
         }
     },
 
-    mouseMoveListener: function (e, camera){
-        var vector = new THREE.Vector3(),
-        x,
-        y;
+    mouseMoveListener: function (e){
 
+        IK.mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+        IK.mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
 
-        if (e.pageX || e.pageY) {
-                x = e.pageX;
-                y = e.pageY;
-            } else {
-                x = e.clientX;
-                y = e.clientY;
-            }
+    },
 
-            vector.set(
-                ( x / window.innerWidth ) * 2 - 1,
-                - ( y / window.innerHeight ) * 2 + 1,
-                0.5 );
+    onWindowResize: function (){
 
-            vector.unproject( camera );
+        IK.camera.aspect = window.innerWidth / window.innerHeight;
+        IK.camera.updateProjectionMatrix();
 
-            var dir = vector.sub( camera.position ).normalize();
+        IK.renderer.setSize( window.innerWidth, window.innerHeight );
 
-            var distance = IK.mouse.mouseMesh.position.sub(camera.position).length();
-
-            var pos = camera.position.clone().add( dir.multiplyScalar( distance ) );
-
-        IK.mouse.mouseBody.position.set(pos.x, pos.y, pos.z);
-        IK.mouse.mouseMesh.position.copy(IK.mouse.mouseBody.position);
-        IK.mouse.mouseMesh.quaternion.copy(IK.mouse.mouseBody.quaternion);
     }
 };
