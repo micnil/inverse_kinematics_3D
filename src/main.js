@@ -266,8 +266,8 @@ IK.main = function (){
                     restTime = 0;
                     target = getClosestBox();
                 } else {
-                    restTime = (restTime>1) ? 0.0 : restTime + 0.1,
-                    target.pos.y += Math.sin(restTime*2*Math.PI)*2; 
+                    restTime = (restTime>1.01) ? 0.0 : restTime + 0.1,
+                    target.pos.y += Math.sin(restTime*2*Math.PI); 
                 }
             } else {
                 //drop cube and find next target.
