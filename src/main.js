@@ -73,8 +73,9 @@ IK.main = function (){
     renderer.shadowMapEnabled = true;
     
     //add listeners
-    document.addEventListener('wheel', function (event){
-        IK.event.wheelListener(event, camera); });
+    document.addEventListener('wheel', function (e){
+        e = e || event; // to deal with IE
+        IK.event.wheelListener(e, camera); });
 
     document.addEventListener('mousemove', function (event){
         IK.event.mouseMoveListener(event, camera); });
@@ -372,7 +373,8 @@ IK.getMovableBoxes = function (boxes){
     var movableBoxes = [];
     boxes.forEach(function(box, i){
         var distanceFromBase = new THREE.Vector3().subVectors(box.position(), box.target.position()).length();
-        if(distanceFromBase>20){
+        var distanceFromBoneChain = new THREE.Vector3().subVectors(box.position(), new THREE.Vector3(0, 0, 0)).length();
+        if(distanceFromBase>20 && distanceFromBoneChain<45){
             movableBoxes.push(box);
         }
     });
