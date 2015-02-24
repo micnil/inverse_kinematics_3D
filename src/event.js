@@ -7,9 +7,9 @@ IK.event = {
         dir.normalize();
         if(distance>1){
             if(e.deltaY>0){
-                distance += 4;
-            }else if(e.deltaY<0){
                 distance -= 4;
+            }else if(e.deltaY<0){
+                distance += 4;
             }
 
             var pos = camera.position.clone().add( dir.multiplyScalar( distance ));
