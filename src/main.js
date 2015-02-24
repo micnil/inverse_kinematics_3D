@@ -262,7 +262,9 @@ IK.main = function (){
             } else if(target === IK.startingPos){
                 movableBoxes = IK.getMovableBoxes(boxes);
                 if(movableBoxes.length){
-                   target = getClosestBox();
+                    target.pos.y = 16;
+                    restTime = 0;
+                    target = getClosestBox();
                 } else {
                     restTime = (restTime>1) ? 0.0 : restTime + 0.1,
                     target.pos.y += Math.sin(restTime*2*Math.PI)*2; 
@@ -274,7 +276,7 @@ IK.main = function (){
                 movableBoxes[movingBoxIndex].boxMesh = lastBone.boneMesh.children[0];
                 THREE.SceneUtils.detach(lastBone.boneMesh.children[0], lastBone.boneMesh, scene);
                 movableBoxes[movingBoxIndex].moveBodyToMesh();
-                //TODO: Rebuild box array
+                //Rebuild box array
                 movableBoxes = IK.getMovableBoxes(boxes);
                 if(movableBoxes.length){
                 target = getClosestBox();
