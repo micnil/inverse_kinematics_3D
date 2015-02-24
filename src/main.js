@@ -19,7 +19,7 @@ IK.boxBaseBlue = {
     position: function() {return new THREE.Vector3(0,20,20)}
 };
 IK.startingPos = {
-    pos: new THREE.Vector3(0,16,-20),
+    pos: new THREE.Vector3(-3,16,-20),
     position: function() {return IK.startingPos.pos}
 };
 
@@ -57,7 +57,6 @@ IK.main = function (){
         target,
         movingBoxIndex,
         angleToTarget,
-        restTime=0,
         meshUrlArray = ["json/bottomBone.js", "json/bone.js"], //put in order you want them to load
         meshes = [], // array with the actual meshes; 
         e_delta = new THREE.Vector3(), //vector from end effector to target position
@@ -262,12 +261,9 @@ IK.main = function (){
             } else if(target === IK.startingPos){
                 movableBoxes = IK.getMovableBoxes(boxes);
                 if(movableBoxes.length){
-                    target.pos.y = 16;
-                    restTime = 0;
                     target = getClosestBox();
                 } else {
-                    restTime = (restTime>1.01) ? 0.0 : restTime + 0.1,
-                    target.pos.y += Math.sin(restTime*2*Math.PI); 
+                    target.pos.y = (target.pos.y<16.5) ? 20 : 13; 
                 }
             } else {
                 //drop cube and find next target.
