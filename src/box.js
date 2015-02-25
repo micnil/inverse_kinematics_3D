@@ -66,7 +66,7 @@ Box.prototype = {
                 this.boxMesh.material.color.setRGB(0.7,1,0.7);
                 break;      
             case 3:  
-                this.boxMesh.material.color.setRGB(1,0.7,0.7);
+                this.boxMesh.material.color.setRGB(0.7,0.7,1);
                 break;      
         }
     },

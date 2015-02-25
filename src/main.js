@@ -48,7 +48,7 @@ IK.main = function (){
         target,
         movingBoxIndex,
         angleToTarget,
-        meshUrlArray = ["json/bottomBone.js", "json/bone.js"], //put in order you want them to load
+        meshUrlArray = ["json/bottomBone.js", "json/bone1.js", "json/magnet.js"], //put in order you want them to load
         meshes = [], // array with the actual meshes; 
         e_delta = new THREE.Vector3(), //vector from end effector to target position
         theta_delta = new THREE.Euler(), //angle from lastbone to target vector
@@ -75,7 +75,7 @@ IK.main = function (){
     IK.scene.add(ambientLight);
 
     // directional lighting
-    var spotLight = new THREE.SpotLight( 0xffff88 );
+    var spotLight = new THREE.SpotLight( 0xffffff );
         spotLight.position.set( 100, 100, 100 );
 
         spotLight.castShadow = true;
@@ -91,7 +91,7 @@ IK.main = function (){
     var planeGeometry = new THREE.PlaneGeometry( 120, 120, 50, 50),
         planeMaterial = new THREE.MeshPhongMaterial( {
             ambient: 0x030303,
-            color: 0xdddddd,
+            color: 0xffff88,
             specular: 0x009900, 
             shininess: 30, 
             shading: THREE.FlatShading} ),
@@ -122,9 +122,10 @@ IK.main = function (){
     //needs to be called after meshes are loaded
     function createBoneChain(){
         boneChain.push(new Bone(1, new THREE.Vector3(0, 1, 0), IK.scene, meshes[0].clone()));
-        for(var i = 1; i<numBones; i++){
+        for(var i = 1; i<numBones-1; i++){
             boneChain.push(new Bone(5, new THREE.Vector3(1, 0, 0), boneChain[i-1], meshes[1].clone()));
         }
+        boneChain.push(new Bone(2, new THREE.Vector3(0, 1, 0), boneChain[numBones-2], meshes[2].clone()));
         lastBone = boneChain[numBones-1];
         //when bones are done, ready to render.
         render();
@@ -203,10 +204,10 @@ IK.main = function (){
     }
 
     //setup camera
-    IK.camera.position.z = 70;
+    IK.camera.position.z = 50;
     IK.camera.position.y = 50;
-    IK.camera.position.x = -50;
-    IK.camera.lookAt(new THREE.Vector3(0,10,0));
+    IK.camera.position.x = 50;
+    IK.camera.lookAt(new THREE.Vector3(0,0,0));
 
     //set first target
     movableBoxes = IK.getMovableBoxes(boxes);
