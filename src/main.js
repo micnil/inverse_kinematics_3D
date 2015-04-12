@@ -92,8 +92,8 @@ IK.main = function (){
         planeMaterial = new THREE.MeshPhongMaterial( {
             ambient: 0x030303,
             color: 0xffff88,
-            specular: 0x009900, 
-            shininess: 30, 
+            specular: 0x009900,
+            shininess: 30,
             shading: THREE.FlatShading} ),
         plane = new THREE.Mesh( planeGeometry, planeMaterial );
     plane.rotation.x -= Math.PI / 2;

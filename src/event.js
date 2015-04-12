@@ -21,8 +21,8 @@ IK.event = {
 
     mouseMoveListener: function (e){
 
-        IK.mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-        IK.mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+        IK.mouse.x = ( e.clientX / window.innerWidth ) * 2 - 1;
+        IK.mouse.y = - ( e.clientY / window.innerHeight ) * 2 + 1;
 
     },
 
