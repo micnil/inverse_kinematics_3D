@@ -24,7 +24,7 @@ IK.startingPos = {
 };
 
 IK.scene = new THREE.Scene();
-IK.renderer = new THREE.WebGLRenderer();
+IK.renderer = new THREE.WebGLRenderer( { antialias: true } );
 IK.camera = new THREE.PerspectiveCamera( 45, window.innerWidth/window.innerHeight, 0.1, 1000 );
 IK.mouse = new THREE.Vector2();
 IK.raycaster = new THREE.Raycaster();
@@ -116,7 +116,7 @@ IK.main = function (){
         var box = new Box(randomType, 0,5 + numBoxes*2,-15);
         boxes.push(box);
         IK.scene.add(box.boxMesh);
-        IK.world.add(box.boxBody);        
+        IK.world.add(box.boxBody);
     }
 
     //needs to be called after meshes are loaded
@@ -141,9 +141,9 @@ IK.main = function (){
                 loadMeshes(URLs, callback);
             } else {
                 callback();
-            } 
+            }
         });
-    } 
+    }
 
     loadMeshes(meshUrlArray, createBoneChain);
 
